@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/sergi/go-diff/diffmatchpatch"
 	"io/ioutil"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
+
 	// "net/http"
 	// "net/http/httptest"
 	"path/filepath"
@@ -559,6 +561,22 @@ func TestValidateBytes(t *testing.T) {
 				continue
 			}
 		}
+	}
+}
+
+func TestOpaqueProperties(t *testing.T) {
+	const input = `{
+    "$id": "https://www.github.com/schemas/robfig",
+    "properties": {
+        "name": {
+            "type": "string",
+            "opaque": "something"
+        }
+    }
+}`
+	var rs RootSchema
+	if err := rs.UnmarshalJSON([]byte(input)); err != nil {
+		t.Error(err)
 	}
 }
 
