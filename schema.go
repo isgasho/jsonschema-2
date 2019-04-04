@@ -460,6 +460,7 @@ type _schema struct {
 
 // UnmarshalJSON implements the json.Unmarshaler interface for Schema
 func (s *Schema) UnmarshalJSON(data []byte) error {
+	fmt.Printf("Schema.UnmarshalJSON: %q\n", string(data))
 	// support simple true false schemas that always pass or fail
 	var b bool
 	if err := json.Unmarshal(data, &b); err == nil {
