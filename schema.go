@@ -523,6 +523,7 @@ func (s *Schema) UnmarshalJSON(data []byte) error {
 			case "$schema", "$id", "title", "description", "default", "examples", "readOnly", "writeOnly", "$comment", "$ref", "definitions", "format":
 				continue
 			default:
+				fmt.Println(prop, "dropping into extra definitions")
 				// assume non-specified props are "extra definitions"
 				if sch.extraDefinitions == nil {
 					sch.extraDefinitions = Definitions{}
