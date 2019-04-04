@@ -474,6 +474,7 @@ func (s *Schema) UnmarshalJSON(data []byte) error {
 
 	_s := _schema{}
 	if err := json.Unmarshal(data, &_s); err != nil {
+		fmt.Println("_schema")
 		return err
 	}
 
@@ -505,6 +506,7 @@ func (s *Schema) UnmarshalJSON(data []byte) error {
 
 	valprops := map[string]json.RawMessage{}
 	if err := json.Unmarshal(data, &valprops); err != nil {
+		fmt.Println("valprops")
 		return err
 	}
 
