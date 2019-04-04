@@ -62,6 +62,7 @@ func (rs *RootSchema) TopLevelType() string {
 func (rs *RootSchema) UnmarshalJSON(data []byte) error {
 	sch := &Schema{}
 	if err := json.Unmarshal(data, sch); err != nil {
+		fmt.Println("RootSchema top")
 		return err
 	}
 
@@ -475,6 +476,7 @@ func (s *Schema) UnmarshalJSON(data []byte) error {
 	_s := _schema{}
 	if err := json.Unmarshal(data, &_s); err != nil {
 		fmt.Println("_schema")
+		fmt.Println(string(data))
 		return err
 	}
 
