@@ -4,8 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/sergi/go-diff/diffmatchpatch"
+	"io"
 	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
+
 	// "net/http"
 	// "net/http/httptest"
 	"path/filepath"
@@ -579,10 +584,87 @@ func TestOpaqueProperties(t *testing.T) {
 	}
 }
 
-// TODO - finish remoteRef.json tests by setting up a httptest server on localhost:1234
-// that uses an http.Dir to serve up testdata/remotes directory
-// func testServer() {
-// 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestFetchRemoteReferences(t *testing.T) {
+	var expectedResolves = map[string]string{
+		"/address": `{"type": "string"}`,
+		"/phone":   `{"type": "string"}`,
+	}
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		t.Log("Resolving:", r.URL.Path)
+		if sch, ok := expectedResolves[r.URL.Path]; !ok {
+			t.Errorf("got an unexpected ref request: %v", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		} else {
+			// expect each to resolve once. delete it to be sure.
+			delete(expectedResolves, r.URL.Path)
+			io.WriteString(w, sch)
+		}
+	}
+	s := httptest.NewServer(http.HandlerFunc(handler))
+	t.Log("Serving running on", s.URL)
+	schemaStr := fmt.Sprintf(`
+{
+    "$id": "https://www.github.com/schemas/robfig",
+    "properties": {
+        "address": {
+            "$ref": "%[1]s/address"
+        },
+        "phones": {
+            "type": "object",
+            "properties": {
+				"mobile": {
+					"$ref": "%[1]s/phone"
+				},
+				"fax": {
+					"$ref": "%[1]s/phone"
+				}
+			},
+			"required": [
+				"mobile"
+			]
+        },
+        "height": {
+            "$ref": "#/definitions/positiveInteger"
+        },
+        "name": {
+            "type": "string"
+        }
+    },
+    "definitions": {
+        "positiveInteger": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+        }
+    }
+}`, s.URL)
 
-// 	}))
-// }
+	var rs RootSchema
+	if err := rs.UnmarshalJSON([]byte(schemaStr)); err != nil {
+		t.Fatal(err)
+	}
+	//	"address": "123 Main st",
+
+	errs, err := rs.ValidateBytes([]byte(`
+{
+	"name": "Mr Smith",
+	"height": 172,
+	"phones": {
+		"mobile": "123",
+		"fax": "456"
+	}
+}`))
+	t.Log(err)
+	t.Log(errs)
+	if err != nil {
+		t.Errorf("error validating: %v", err)
+	}
+	if len(errs) > 0 {
+		t.Errorf("validation returned errors: %v", errs)
+	}
+
+	// TODO: Does it resolve a ref if the data isn't present?
+	if len(expectedResolves) > 0 {
+		t.Errorf("some refs were not resolved: %v", expectedResolves)
+	}
+}

@@ -26,8 +26,8 @@ func Must(jsonString string) *RootSchema {
 	return rs
 }
 
-// DefaultSchemaPool is a package level map of schemas by identifier
-// remote references are cached here.
+// DefaultSchemaPool is a package level map of schemas by identifier.
+// Remote references are cached here.
 var DefaultSchemaPool = Definitions{}
 
 // RootSchema is a top-level Schema.
@@ -143,31 +143,46 @@ func (rs *RootSchema) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// FetchRemoteReferences grabs any url-based schema references that
-// cannot be locally resolved via network requests
+var defaultHttpResolver = &httpRefResolver{
+	client: http.DefaultClient,
+	cache:  DefaultSchemaPool,
+}
+
+// FetchRemoteReferences eagerly resolves remote references using the default
+// HTTP resolver. It grabs any url-based schema references that cannot be
+// locally resolved via network requests.  If this method is not called prior to
+// validation, it happens on-demand during validation.
 func (rs *RootSchema) FetchRemoteReferences() error {
+	return rs.ResolveRemoteReferences(defaultHttpResolver)
+}
+
+// RefResolver provides a way to look up remote references.
+type RefResolver interface {
+	// Resolve returns the given Schema for the (non-empty, remote) reference.
+	// (nil, nil) is returned if the schema could not be found.
+	// Else, an error is returned if there was another problem in resolution.
+	Resolve(ref string) (*Schema, error)
+}
+
+// ResolveRemoteReferences resolves all schema references that are not
+// document-local, using the provided resolver.
+//
+// An error is returned if any references failed to resolve.
+//
+// This method must be called prior to Validate() if your document has
+// any remote references, or validation will fail.
+func (rs *RootSchema) ResolveRemoteReferences(rslv RefResolver) error {
 	sch := &rs.Schema
-
-	refs := DefaultSchemaPool
-
 	if err := walkJSON(sch, func(elem JSONPather) error {
 		if sch, ok := elem.(*Schema); ok {
 			ref := sch.Ref
-			if ref != "" {
-				if refs[ref] == nil && ref[0] != '#' {
-					if u, err := url.Parse(ref); err == nil {
-						if res, err := http.Get(u.String()); err == nil {
-							s := &RootSchema{}
-							if err := json.NewDecoder(res.Body).Decode(s); err != nil {
-								return err
-							}
-							refs[ref] = &s.Schema
-						}
-					}
+			if ref != "" && ref[0] != '#' {
+				refSchema, err := rslv.Resolve(ref)
+				if err != nil {
+					return err
 				}
-
-				if refs[ref] != nil {
-					sch.ref = refs[ref]
+				if refSchema != nil {
+					sch.ref = refSchema
 				}
 			}
 		}
@@ -175,8 +190,6 @@ func (rs *RootSchema) FetchRemoteReferences() error {
 	}); err != nil {
 		return err
 	}
-
-	rs.Schema = *sch
 	return nil
 }
 
@@ -366,6 +379,7 @@ func (s *Schema) Path() string {
 // Validate uses the schema to check an instance, collecting validation
 // errors in a slice
 func (s *Schema) Validate(propPath string, data interface{}, errs *[]ValError) {
+	fmt.Println("Validate:", propPath)
 	if s.Ref != "" && s.ref != nil {
 		s.ref.Validate(propPath, data, errs)
 		return
@@ -525,6 +539,8 @@ func (s *Schema) UnmarshalJSON(data []byte) error {
 				s := new(Schema)
 				if err := json.Unmarshal(rawmsg, s); err == nil {
 					sch.extraDefinitions[prop] = s
+				} else {
+					fmt.Println(err)
 				}
 				sch.extraDefinitions[prop] = s
 				continue
